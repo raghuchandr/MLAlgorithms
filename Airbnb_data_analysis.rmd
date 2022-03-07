@@ -1,0 +1,123 @@
+
+
+```{r librares, include=FALSE}
+rm(list=ls())
+# install.packages("sqldf")
+#library(sqldf)
+library(dplyr, warn.conflicts = FALSE, quietly = FALSE, verbose = FALSE)
+library(lubridate, warn.conflicts = FALSE, quietly = FALSE, verbose = FALSE)
+library(dplyr, include=FALSE)
+library(ggplot2)
+library(tibble)
+
+```
+
+
+
+```{r reading_data}
+airbnb_listing_data = read.csv("listings.csv") #Loading the listing data. 
+names(airbnb_listing_data) # 74 atributes
+dim(airbnb_listing_data) # rows 46527 cols 74
+#View(airbnb_listing_data)
+
+#airbnb_all <- airbnb_listing_data %>% select(id,listing_url,scrape_id,last_scraped,name,description,neighborhood_overview,picture_url,host_id,host_url,host_name,host_since,host_location,host_about,host_response_time,host_response_rate,host_acceptance_rate,host_is_superhost,host_thumbnail_url,host_picture_url,host_neighbourhood,host_listings_count,host_total_listings_count,host_verifications,host_has_profile_pic,host_identity_verified,neighbourhood,neighbourhood_cleansed,neighbourhood_group_cleansed,latitude,longitude,property_type,room_type,accommodates,bathrooms,bathrooms_text,bedrooms,beds,amenities,price,minimum_nights,maximum_nights,minimum_minimum_nights,maximum_minimum_nights,minimum_maximum_nights,maximum_maximum_nights,minimum_nights_avg_ntm,maximum_nights_avg_ntm,calendar_updated,has_availability,availability_30,availability_60,availability_90,availability_365,calendar_last_scraped,number_of_reviews,number_of_reviews_ltm,number_of_reviews_l30d,first_review,last_review,review_scores_rating,review_scores_accuracy,review_scores_cleanliness,review_scores_checkin,review_scores_communication,review_scores_location,review_scores_value,license,instant_bookable,calculated_host_listings_count,calculated_host_listings_count_entire_homes,calculated_host_listings_count_private_rooms,calculated_host_listings_count_shared_rooms,reviews_per_month)
+
+#Reading only key variables
+airbnb_reduced_1 <- add_column(airbnb_listing_data %>% select(id,neighbourhood_group_cleansed,neighbourhood_cleansed,room_type,price,minimum_nights), count =1)
+# Formating the price
+airbnb_reduced_1$price <- as.numeric(gsub('[$,]','',airbnb_reduced_1$price))
+
+summary(airbnb_reduced_1[,-6])
+names(airbnb_reduced_1) # 74 atributes
+dim(airbnb_reduced_1) # rows 46527 cols 74
+
+```
+
+# https://www.airbnb.com/rooms/38801002 > Shared room 19.
+# https://www.airbnb.com/rooms/20933849 > 0 night
+# https://www.airbnb.com/rooms/13894339 > 10000 night entire apart.
+# https://www.airbnb.com/rooms/40466006 > Entire apart 20 night
+
+```{r agg_ngc, include=FALSE}
+ngc_sum_count = aggregate(airbnb_reduced_1[,6], by = list(airbnb_reduced_1$neighbourhood_group_cleansed), sum)
+ngc_avg_price = aggregate(airbnb_reduced_1[,4], by = list(airbnb_reduced_1$neighbourhood_group_cleansed), mean)
+ngc_avg_min_night = aggregate(airbnb_reduced_1[,5], by = list(airbnb_reduced_1$neighbourhood_group_cleansed), mean)
+View(ngc_sum_count)
+View(ngc_avg_price)
+View(ngc_avg_min_night)
+pct <- round(ngc_sum_count$x/sum(ngc_sum_count$x)*100)
+lbls <- paste(ngc_sum_count$Group.1, pct)
+lbls <- paste(lbls,"%",sep="")
+pie(ngc_sum_count$x, labels = lbls, main="AirBnb property listing by Neighbourhood")
+```
+
+```{r agg_rt, include=FALSE}
+#room_type
+rt_sum_count =  aggregate(airbnb_reduced_1[,6], by = list(airbnb_reduced_1$room_type), sum)
+rt_avg_price = aggregate(airbnb_reduced_1[,4], by = list(airbnb_reduced_1$room_type), mean)
+rt_avg_min_night = aggregate(airbnb_reduced_1[,5], by = list(airbnb_reduced_1$room_type), mean)
+pct <- round(rt_sum_count$x/sum(rt_sum_count$x)*100)
+lbls <- paste(rt_sum_count$Group.1, pct)
+lbls <- paste(lbls,"%",sep="")
+pie(rt_sum_count$x, labels = lbls, main="AirBnb property listing by Room Type")
+```
+
+```{r agg_ngc_rt, include=FALSE}
+#neighbourhood_group_cleansed/room_type
+ngc_rt_avg_price = aggregate(airbnb_reduced_1[,4], by = list(airbnb_reduced_1$neighbourhood_group_cleansed,airbnb_reduced_1$room_type), mean)
+
+ngc_rt_avg_price <- airbnb_reduced_1 %>% select(neighbourhood_group_cleansed,room_type,price)
+
+boxplot(ngc_rt_avg_price$price~ngc_rt_avg_price$neighbourhood_group_cleansed+ngc_rt_avg_price$room_type, names = c("", "", "Entire Apart", "", "", "", "","Hotel Room", "", "", "", "", "Private Room", "", "", "", "", "Shared Room", "", ""))
+```
+
+```{r agg_nc, include=FALSE}
+#neighbourhood_cleansed
+nc_sum_count = aggregate(airbnb_reduced_1[,6], by = list(airbnb_reduced_1$neighbourhood_cleansed), sum)
+nc_avg_price = aggregate(airbnb_reduced_1[,4], by = list(airbnb_reduced_1$neighbourhood_cleansed), mean)
+nc_avg_min_night = aggregate(airbnb_reduced_1[,5], by = list(airbnb_reduced_1$neighbourhood_cleansed), mean)
+```
+
+```{r price_dist, include=FALSE}
+#get price distribution
+prices <- na.omit(airbnb_listing_data$price)
+substr(airbnb_listing_data$price[1], 2, nchar(airbnb_listing_data$price[1]))
+as.numeric(substr(airbnb_listing_data$price[1], 2, nchar(airbnb_listing_data$price[1])))
+as.numeric(substr(prices, 2, nchar(prices)))
+hist(as.numeric(substr(prices, 2, nchar(prices))))
+
+# plot
+boxplot(price~neighbourhood_group_cleansed, data=airbnb_reduced_1)
+```
+
+```{r sp_acc_vs_pri, include=FALSE}
+#scatterplot accomodates vs price
+airbnb_listing_accom_price <- airbnb_listing_data %>% select(price, accommodates, bedrooms)
+airbnb_listing_accom_price <- na.omit(airbnb_listing_accom_price)
+airbnb_listing_accom_price <- airbnb_listing_accom_price %>% mutate(price_cleaned = as.numeric(substr(price, 2, nchar(price))))
+
+plot(airbnb_listing_accom_price$accommodates~airbnb_listing_accom_price$price_cleaned)
+plot(airbnb_listing_accom_price$bedrooms~airbnb_listing_accom_price$price_cleaned)
+
+```
+
+```{r commented, include=FALSE}
+#Filterign outliers using IQR
+# lowerq = quantile(airbnb_reduced_1$price)[2] #1st Quantile
+# upperq = quantile(airbnb_reduced_1$price)[4] #3rd Quantile
+# iqr = upperq - lowerq #Or use IQR(data)
+# 
+# mild.threshold.upper = (iqr * 1.5) + upperq
+# mild.threshold.lower = lowerq - (iqr * 1.5)
+# 
+# airbnb_reduced_1 <- airbnb_reduced_1[airbnb_reduced_1$price<=mild.threshold.upper,]
+# airbnb_reduced_1 <- airbnb_reduced_1[airbnb_reduced_1$price>=0,]
+
+#print(airbnb_reduced_1[,airbnb_reduced_1$price > 0.00])
+
+```
+
+
+
+
+
